@@ -1,17 +1,21 @@
 
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout";
+import { loginUser } from "../api/authService";
 import "../Auth.css";
 
 function Login() {
+  const navigate = useNavigate();
+
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setMessage("");
 
@@ -20,7 +24,39 @@ function Login() {
       return;
     }
 
-    setMessage("Login form is ready. Backend integration is pending.");
+    try {
+      setLoading(true);
+
+      const response = await loginUser(email.trim(), password);
+
+      if (!response?.token || !response?.user) {
+        throw new Error("Invalid response received from server.");
+      }
+
+      // Clear any previous authentication
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("user");
+
+      // Store authentication based on Remember Me
+      const storage = rememberMe ? localStorage : sessionStorage;
+
+      storage.setItem("token", response.token);
+      storage.setItem("user", JSON.stringify(response.user));
+
+      // Redirect to dashboard
+      navigate("/dashboard");
+
+    }  catch (error) {
+      setMessage(
+          error.message === "Request failed: 401"
+              ? "Invalid email or password. Please try again."
+              : error.message
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -93,12 +129,18 @@ function Login() {
           </label>
 
           {message && (
-            <div className="auth-message">{message}</div>
+            <div className="auth-message" role="alert">
+              {message}
+            </div>
           )}
 
-          <button type="submit" className="auth-submit">
-            Login to SnapURL
-            <span>→</span>
+          <button
+            type="submit"
+            className="auth-submit"
+            disabled={loading}
+          >
+            {loading ? "Logging in..." : "Login to SnapURL"}
+            {!loading && <span>→</span>}
           </button>
 
         </form>
